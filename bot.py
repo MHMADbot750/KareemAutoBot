@@ -1,34 +1,69 @@
+import os
+import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-import yt_dlp
-import os
 
-TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
+TOKEN = TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
-    ydl_opts = {
-        'format': 'best',
-        'outtmpl': 'video.%(ext)s',
-        'noplaylist': True,
-        'quiet': True,
-        'nocheckcertificate': True,
-        'geo_bypass': True
+    loading = await update.message.reply_text("🐿️ جاري تحميل الفيديو...")
+
+    video_opts = {
+        "format": "bestvideo+bestaudio/best",
+        "merge_output_format": "mp4",
+        "outtmpl": "video.%(ext)s",
+        "quiet": True,
+        "noplaylist": True
+    }
+
+    audio_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": "audio.%(ext)s",
+        "quiet": True,
+        "noplaylist": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }]
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+        # تحميل الفيديو
+        with yt_dlp.YoutubeDL(video_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            video_file = ydl.prepare_filename(info)
 
-        await update.message.reply_video(video=open(filename, "rb"), caption="🕊️")
+        # تحميل الصوت
+        with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            ydl.extract_info(url, download=True)
 
-        os.remove(filename)
+        audio_file = "audio.mp3"
+
+        await loading.delete()
+
+        if os.path.exists(video_file):
+            with open(video_file, "rb") as v:
+                await update.message.reply_video(v)
+
+        if os.path.exists(audio_file):
+            with open(audio_file, "rb") as a:
+                await update.message.reply_audio(a)
+
+        if os.path.exists(video_file):
+            os.remove(video_file)
+
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
 
     except Exception as e:
-        await update.message.reply_text(f"حدث خطأ: {e}")
+        await loading.edit_text("❌ فشل تحميل الفيديو")
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
+
+print("Bot started")
 app.run_polling()
