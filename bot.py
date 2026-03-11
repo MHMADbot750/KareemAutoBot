@@ -3,11 +3,11 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 import yt_dlp
 import os
 
-# التوكن جاهز هنا
+# التوكن جاهز
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text
+    url = update.message.text.strip()
     ydl_opts = {
         'format': 'best',
         'outtmpl': 'video.%(ext)s',
@@ -16,15 +16,16 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
+        'noplaylist': True,  # لتجنب قوائم التشغيل
+        'quiet': True,       # لإخفاء أي رسائل في الخلفية
     }
 
     try:
-        # تحميل الفيديو وتحويل الصوت
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url)
             filename = ydl.prepare_filename(info)
 
-        # إرسال الفيديو أو الصوت مع رمز الطائر 🕊️
+        # إرسال الفيديو أو الصوت مباشرة مع رمز الطائر 🕊️
         if os.path.exists(filename):
             if filename.endswith(".mp3"):
                 await update.message.reply_audio(audio=open(filename, "rb"), caption="🕊️")
@@ -35,7 +36,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         os.remove(filename)
 
     except Exception as e:
-        await update.message.reply_text(f"خطأ: {e}")
+        await update.message.reply_text(f"حدث خطأ: {e}")
 
 # إعداد البوت وتشغيله
 app = ApplicationBuilder().token(TOKEN).build()
