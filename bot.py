@@ -3,19 +3,17 @@ import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-TOKEN = "ضع_توكن_البوت_هنا"
+TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
-    # نقبل روابط يوتيوب فقط
     if "youtu" not in url:
-        await update.message.reply_text("❌ أرسل رابط يوتيوب فقط")
+        await update.message.reply_text("ارسل رابط يوتيوب فقط")
         return
 
-    msg = await update.message.reply_text("⏳ جاري تحميل فيديو يوتيوب...")
+    msg = await update.message.reply_text("⏳ جاري تحميل الفيديو...")
 
-    # نحاول أخذ mp4 جاهز مع الصوت (لا يحتاج FFmpeg)
     ydl_opts = {
         "format": "best[ext=mp4]/best",
         "outtmpl": "video.%(ext)s",
@@ -41,9 +39,8 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(filename):
             with open(filename, "rb") as f:
                 await update.message.reply_video(f)
+
             os.remove(filename)
-        else:
-            await update.message.reply_text("❌ لم يتم العثور على الملف بعد التحميل")
 
     except Exception as e:
         await msg.edit_text(f"❌ فشل التحميل\n{e}")
