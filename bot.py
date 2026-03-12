@@ -9,24 +9,16 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
 
     if "youtu" not in url:
-        await update.message.reply_text("ارسل رابط يوتيوب فقط")
+        await update.message.reply_text("❌ أرسل رابط يوتيوب فقط")
         return
 
-    msg = await update.message.reply_text("⏳ جاري تحميل الفيديو...")
+    msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     ydl_opts = {
-        "format": "best[ext=mp4]/best",
+        "format": "best[ext=mp4]",
         "outtmpl": "video.%(ext)s",
         "quiet": True,
-        "noplaylist": True,
-        "nocheckcertificate": True,
-        "geo_bypass": True,
-        "extractor_args": {
-            "youtube": {"player_client": ["android", "web"]}
-        },
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0"
-        }
+        "noplaylist": True
     }
 
     try:
@@ -37,8 +29,8 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.delete()
 
         if os.path.exists(filename):
-            with open(filename, "rb") as f:
-                await update.message.reply_video(f)
+            with open(filename, "rb") as video:
+                await update.message.reply_video(video)
 
             os.remove(filename)
 
