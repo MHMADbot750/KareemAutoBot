@@ -1,13 +1,8 @@
-import os
-import yt_dlp
-import subprocess
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
-
-# تحديث yt-dlp تلقائياً
-subprocess.run(["pip", "install", "-U", "yt-dlp"])
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
@@ -16,30 +11,19 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ أرسل رابط يوتيوب فقط")
         return
 
-    msg = await update.message.reply_text("⏳ جاري التحميل...")
-
-    ydl_opts = {
-        "format": "best[ext=mp4]/best",
-        "outtmpl": "video.%(ext)s",
-        "quiet": True,
-        "noplaylist": True
-    }
+    msg = await update.message.reply_text("⏳ جاري جلب الفيديو...")
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+        api = f"https://p.oceansaver.in/ajax/download.php?format=720&url={url}"
+        data = requests.get(api).json()
+
+        video = data["url"]
 
         await msg.delete()
-
-        if os.path.exists(filename):
-            with open(filename, "rb") as video:
-                await update.message.reply_video(video)
-
-            os.remove(filename)
+        await update.message.reply_video(video)
 
     except Exception as e:
-        await msg.edit_text(f"❌ فشل التحميل\n{e}")
+        await msg.edit_text("❌ فشل تحميل الفيديو")
 
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
