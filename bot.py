@@ -1,9 +1,13 @@
 import os
 import yt_dlp
+import subprocess
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
+
+# تحديث yt-dlp تلقائياً
+subprocess.run(["pip", "install", "-U", "yt-dlp"])
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
@@ -15,7 +19,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     ydl_opts = {
-        "format": "best[ext=mp4]",
+        "format": "best[ext=mp4]/best",
         "outtmpl": "video.%(ext)s",
         "quiet": True,
         "noplaylist": True
