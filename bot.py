@@ -1,46 +1,36 @@
 import os
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
-
-user_links = {}
-
-async def get_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
-
-    user_links[update.message.chat_id] = url
-
-    keyboard = [
-        [
-            InlineKeyboardButton("📹 تحميل فيديو", callback_data="video"),
-            InlineKeyboardButton("🎵 تحميل صوت", callback_data="audio")
-        ]
-    ]
-
-    await update.message.reply_text(
-        "اختر نوع التحميل:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+TOKEN = "PUT_YOUR_BOT_TOKEN_HERE"
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    url = update.message.text.strip()
 
-    url = user_links.get(query.message.chat_id)
+    msg = await update.message.reply_text("⏳ جاري التحميل...")
 
-    await query.message.edit_text("⏳ جاري التحميل...")
+    try:
 
-    if query.data == "video":
-        ydl_opts = {
+        # تحميل الفيديو
+        video_opts = {
             "format": "bestvideo+bestaudio/best",
             "merge_output_format": "mp4",
-            "outtmpl": "video.%(ext)s",
+            "outtmpl": "video.mp4",
             "quiet": True
         }
-    else:
-        ydl_opts = {
+
+        with yt_dlp.YoutubeDL(video_opts) as ydl:
+            ydl.download([url])
+
+        # إرسال الفيديو
+        with open("video.mp4", "rb") as f:
+            await update.message.reply_video(f)
+
+        os.remove("video.mp4")
+
+        # تحميل الصوت
+        audio_opts = {
             "format": "bestaudio/best",
             "outtmpl": "audio.%(ext)s",
             "quiet": True,
@@ -51,30 +41,24 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }]
         }
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+        with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            ydl.download([url])
 
-        if query.data == "video":
-            with open(filename, "rb") as f:
-                await query.message.reply_video(f)
-        else:
-            mp3 = filename.rsplit(".", 1)[0] + ".mp3"
-            with open(mp3, "rb") as f:
-                await query.message.reply_audio(f)
+        # إرسال الصوت
+        with open("audio.mp3", "rb") as f:
+            await update.message.reply_audio(f)
 
-        for file in os.listdir():
-            if file.startswith("video") or file.startswith("audio"):
-                os.remove(file)
+        os.remove("audio.mp3")
 
-    except:
-        await query.message.reply_text("❌ فشل التحميل")
+        await msg.delete()
+
+    except Exception as e:
+        await msg.edit_text("❌ فشل التحميل")
 
 app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_link))
-app.add_handler(CallbackQueryHandler(download))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
 
 print("Bot started")
+
 app.run_polling()
