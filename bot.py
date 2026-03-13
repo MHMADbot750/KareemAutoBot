@@ -5,7 +5,11 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTyp
 
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
+downloading = False
+
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    global downloading
 
     url = update.message.text.strip()
 
@@ -13,54 +17,42 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ أرسل رابط TikTok فقط")
         return
 
+    if downloading:
+        await update.message.reply_text("⏳ يتم تحميل فيديو آخر انتظر قليلاً")
+        return
+
+    downloading = True
+
     msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     try:
 
-        # تحميل الفيديو
-        video_opts = {
+        ydl_opts = {
             "format": "best",
             "outtmpl": "video.mp4",
             "quiet": True,
             "noplaylist": True
         }
 
-        with yt_dlp.YoutubeDL(video_opts) as ydl:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
         if os.path.exists("video.mp4"):
+
             with open("video.mp4", "rb") as f:
                 await update.message.reply_video(f)
 
             os.remove("video.mp4")
 
-        # تحميل الصوت
-        audio_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": "audio.%(ext)s",
-            "quiet": True,
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192"
-            }]
-        }
+            await msg.delete()
 
-        with yt_dlp.YoutubeDL(audio_opts) as ydl:
-            ydl.download([url])
-
-        if os.path.exists("audio.mp3"):
-            with open("audio.mp3", "rb") as f:
-                await update.message.reply_audio(f)
-
-            os.remove("audio.mp3")
-
-        await msg.delete()
+        else:
+            await msg.edit_text("❌ فشل تحميل الفيديو")
 
     except Exception as e:
-        print(e)
-        await msg.edit_text("❌ فشل التحميل")
+        await msg.edit_text(f"❌ خطأ:\n{e}")
 
+    downloading = False
 
 
 app = ApplicationBuilder().token(TOKEN).build()
