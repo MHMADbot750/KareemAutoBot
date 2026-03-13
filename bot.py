@@ -1,79 +1,74 @@
 import os
 import asyncio
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from telegram.constants import ChatAction
 
+# التوكن الخاص بك
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-# محاولة إضافة مسارات ffmpeg الشائعة في Railway
-os.environ["PATH"] += os.pathsep + "/usr/bin" + os.pathsep + "/bin"
-
 def ytdl_download(url, filename, mode):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "nocheckcertificate": True,
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    }
-    
     if mode == "audio":
-        opts.update({
-            "format": "bestaudio/best",
+        # طلب أفضل جودة صوت بصيغة m4a مباشرة لتجنب الحاجة للتحويل بـ ffmpeg
+        opts = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
             "outtmpl": filename,
-            "postprocessors": [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }],
-        })
+            "noplaylist": True,
+            "quiet": True
+        }
     else:
-        # تحميل فيديو MP4 جاهز لتجنب الحاجة للدمج في حال فشل ffmpeg
-        opts.update({
+        # طلب أفضل جودة فيديو مدمجة بصيغة mp4
+        opts = {
             "format": "best[ext=mp4]/best",
             "outtmpl": filename,
-        })
-        
+            "noplaylist": True,
+            "quiet": True
+        }
+    
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
 
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
-    if "http" in url:
-        keyboard = [
-            [InlineKeyboardButton("🎬 تحميل فيديو", callback_data=f"vid|{url}")],
-            [InlineKeyboardButton("🎵 استخراج صوت MP3", callback_data=f"aud|{url}")]
-        ]
-        await update.message.reply_text("اختر النوع المطلوب:", reply_markup=InlineKeyboardMarkup(keyboard))
+    if not url.startswith("http"):
+        return
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    mode, url = query.data.split("|")
-    status = await query.message.reply_text("⏳ جاري المعالجة... يرجى الانتظار")
-    
+    user_id = update.message.from_user.id
+    status_msg = await update.message.reply_text("⏳ جاري تحضير الفيديو والصوت معاً... انتظر قليلاً")
+
     try:
-        if mode == "vid":
-            fname = f"vid_{query.from_user.id}.mp4"
-            await asyncio.to_thread(ytdl_download, url, fname, "video")
-            if os.path.exists(fname):
-                with open(fname, "rb") as f:
-                    await query.message.reply_video(video=f, caption="تم التحميل بنجاح ✅")
-                os.remove(fname)
-        else:
-            fname = f"aud_{query.from_user.id}.mp3"
-            await asyncio.to_thread(ytdl_download, url, fname, "audio")
-            if os.path.exists(fname):
-                with open(fname, "rb") as f:
-                    await query.message.reply_audio(audio=f, caption="تم استخراج الصوت 🎵")
-                os.remove(fname)
-        await status.delete()
+        # 1. تحميل وإرسال الفيديو
+        video_file = f"vid_{user_id}.mp4"
+        await context.bot.send_chat_action(chat_id=update.message.chat_id, action=ChatAction.UPLOAD_VIDEO)
+        await asyncio.to_thread(ytdl_download, url, video_file, "video")
+        
+        if os.path.exists(video_file):
+            with open(video_file, "rb") as v:
+                await update.message.reply_video(video=v, caption="تم تحميل الفيديو بنجاح ✅")
+            os.remove(video_file)
+
+        # 2. تحميل وإرسال الصوت تلقائياً بعد الفيديو
+        audio_file_base = f"aud_{user_id}"
+        await context.bot.send_chat_action(chat_id=update.message.chat_id, action=ChatAction.UPLOAD_VOICE)
+        await asyncio.to_thread(ytdl_download, url, audio_file_base, "audio")
+        
+        # البحث عن الملف الصوتي الناتج (سواء m4a أو mp3 أو webm)
+        for ext in [".m4a", ".mp3", ".webm"]:
+            full_path = audio_file_base + ext
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as a:
+                    await update.message.reply_audio(audio=a, caption="تم استخراج الصوت تلقائياً 🎵")
+                os.remove(full_path)
+                break
+
+        await status_msg.delete()
+
     except Exception as e:
-        await status.edit_text(f"❌ حدث خطأ: {str(e)[:150]}")
+        await update.message.reply_text(f"❌ فشل التحميل: {str(e)[:100]}")
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
-    app.add_handler(CallbackQueryHandler(button_callback))
+    print("البوت يعمل الآن يا كريم... أرسل رابطاً للتجربة")
     app.run_polling()
