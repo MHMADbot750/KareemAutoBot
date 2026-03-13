@@ -16,18 +16,21 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "format": "bestvideo+bestaudio/best",
             "merge_output_format": "mp4",
             "outtmpl": "video.mp4",
+            "writethumbnail": True,
             "quiet": True,
             "noplaylist": True
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+            info = ydl.extract_info(url, download=True)
+
+        title = info.get("title", "Video")
 
         # ارسال الفيديو
         with open("video.mp4", "rb") as f:
-            await update.message.reply_video(f)
+            await update.message.reply_video(f, caption=title)
 
-        # استخراج الصوت من الفيديو
+        # استخراج الصوت
         subprocess.run(
             ["ffmpeg", "-i", "video.mp4", "-vn", "-ab", "192k", "-ar", "44100", "-y", "audio.mp3"],
             stdout=subprocess.DEVNULL,
@@ -36,7 +39,7 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # ارسال الصوت
         with open("audio.mp3", "rb") as f:
-            await update.message.reply_audio(f)
+            await update.message.reply_audio(f, title=title)
 
         os.remove("video.mp4")
         os.remove("audio.mp3")
