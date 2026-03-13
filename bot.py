@@ -4,48 +4,82 @@ import asyncio
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-TOKEN = "8701664697:AAEuxlF3u933O6-7D_p8G0N-X0YpL2mI"
+# التوكن الجديد الذي أرسلته
+TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def download_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     if "http" not in url:
         return
 
-    msg = await update.message.reply_text("⏳ جاري جلب الفيديو... انتظر قليلاً")
+    msg = await update.message.reply_text("⏳ جاري تحميل الفيديو واستخراج الصوت... انتظر قليلاً")
     
-    # اسم الملف المؤقت
-    video_file = f"video_{update.message.chat_id}.mp4"
+    chat_id = update.message.chat_id
+    video_file = f"video_{chat_id}.mp4"
+    audio_file = f"audio_{chat_id}.mp3"
     
-    ydl_opts = {
+    # إعدادات تحميل الفيديو
+    ydl_opts_video = {
         'format': 'best',
         'outtmpl': video_file,
         'quiet': True,
         'no_warnings': True,
     }
+    
+    # إعدادات استخراج الصوت
+    ydl_opts_audio = {
+        'format': 'bestaudio/best',
+        'outtmpl': 'audio_temp', # ملف مؤقت
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'quiet': True,
+        'no_warnings': True,
+    }
 
-    # إضافة الكوكيز فقط إذا كان الرابط ليوتيوب
+    # استخدام الكوكيز ليوتيوب فقط
     if "youtube" in url or "youtu.be" in url:
-        ydl_opts['cookiefile'] = 'youtube.com_cookies.txt'
+        ydl_opts_video['cookiefile'] = 'youtube.com_cookies.txt'
+        ydl_opts_audio['cookiefile'] = 'youtube.com_cookies.txt'
     
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # 1. تحميل الفيديو
+        with yt_dlp.YoutubeDL(ydl_opts_video) as ydl:
             await asyncio.to_thread(ydl.download, [url])
         
-        await update.message.reply_video(video=open(video_file, 'rb'), caption="تم التحميل بنجاح ✅")
+        # 2. تحميل واستخراج الصوت
+        with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+            await asyncio.to_thread(ydl.download, [url])
         
-        # تنظيف الملفات
-        if os.path.exists(video_file):
-            os.remove(video_file)
+        # البحث عن ملف الصوت الفعلي (لأن yt-dlp يغير الاسم أحياناً)
+        actual_audio = 'audio_temp.mp3'
+        
+        # إرسال الفيديو
+        with open(video_file, 'rb') as v:
+            await update.message.reply_video(video=v, caption="🎬 تم تحميل الفيديو بنجاح")
+            
+        # إرسال الصوت
+        if os.path.exists(actual_audio):
+            with open(actual_audio, 'rb') as a:
+                await update.message.reply_audio(audio=a, caption="🎵 تم استخراج الصوت")
+            os.remove(actual_audio)
+        
         await msg.delete()
         
     except Exception as e:
         await update.message.reply_text(f"❌ حدث خطأ: {str(e)}")
+    
+    finally:
+        # تنظيف الملفات
         if os.path.exists(video_file):
             os.remove(video_file)
 
 def main():
     application = Application.builder().token(TOKEN).build()
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_media))
+    print("البوت يعمل الآن بالتوكن الجديد...")
     application.run_polling()
 
 if __name__ == '__main__':
