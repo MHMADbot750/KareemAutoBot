@@ -10,7 +10,7 @@ from telegram.constants import ChatAction
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 LOADING_STICKER = "CAACAgIAAxkBAAIBQ2X"
 
-# دالة التحميل مع ضمان دمج الصوت والفيديو
+# دالة التحميل مع ضمان دمج الصوت والفيديو باستخدام ffmpeg
 def ytdl_download(url, filename, fmt):
     opts = {
         "format": f"{fmt}+bestaudio/best/best",
@@ -18,13 +18,12 @@ def ytdl_download(url, filename, fmt):
         "quiet": True,
         "noplaylist": True,
         "merge_output_format": "mp4",
-        "postprocessor_args": ['-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental']
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أهلاً كريم! أرسل رابط يوتيوب أو تيك توك وسأبدأ التحميل.")
+    await update.message.reply_text("أهلاً كريم! أرسل رابط يوتيوب وسأبدأ التحميل.")
 
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text.strip()
@@ -42,9 +41,6 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("اختر الدقة:", reply_markup=InlineKeyboardMarkup(buttons[:8]))
         except Exception as e:
             await update.message.reply_text(f"خطأ في الرابط: {e}")
-    elif "tiktok.com" in url:
-        # يمكنك إضافة منطق التيك توك هنا لاحقاً بنفس الطريقة
-        pass
 
 async def download_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -54,32 +50,33 @@ async def download_quality(update: Update, context: ContextTypes.DEFAULT_TYPE):
     filename = f"vid_{query.from_user.id}.mp4"
 
     try:
-        # إظهار حالة "جاري الرفع"
+        # إظهار حالة "جاري رفع فيديو" في التليجرام
         await context.bot.send_chat_action(chat_id=query.message.chat_id, action=ChatAction.UPLOAD_VIDEO)
         
-        # التحميل في خلفية البوت
+        # تنفيذ التحميل
         await asyncio.to_thread(ytdl_download, url, filename, fmt)
         
         if os.path.exists(filename):
             with open(filename, "rb") as v:
-                # إرسال الفيديو مع زيادة وقت الانتظار يدوياً داخل الدالة
+                # وضعنا التوقيتات هنا داخل الإرسال مباشرة لتجنب خطأ الـ TypeError
                 await query.message.reply_video(
                     video=v, 
                     caption="تم التحميل بنجاح ✅\nبواسطة بوت كريم",
-                    connect_timeout=60,
                     read_timeout=300,
-                    write_timeout=300
+                    write_timeout=300,
+                    connect_timeout=60
                 )
             os.remove(filename)
         else:
-            await query.message.reply_text("❌ عذراً، لم أستطع إيجاد الملف بعد تحميله.")
+            await query.message.reply_text("❌ لم يتم العثور على الملف بعد تحميله.")
     except Exception as e:
         await query.message.reply_text(f"❌ حدث خطأ أثناء الإرسال: {e}")
     finally:
-        await sticker.delete()
+        if sticker:
+            await sticker.delete()
 
 def main():
-    # تعديل طريقة بناء التطبيق لتلافي خطأ الـ TypeError
+    # بناء التطبيق بالطريقة البسيطة لتجنب تعارض النسخ
     app = ApplicationBuilder().token(TOKEN).build()
     
     app.add_handler(MessageHandler(filters.COMMAND, start))
