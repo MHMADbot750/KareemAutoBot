@@ -1,46 +1,40 @@
 import os
 import yt_dlp
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
+TOKEN = "8701664697:AAEuxlF3u933O6-7D_p8G0N-X0YpL2mI"
 
-# تحديث المكتبة تلقائياً
-os.system("pip install -U yt-dlp")
-
-async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
+    if not url.startswith("http"):
+        return
 
-    await update.message.reply_text("⏳ جاري التحميل...")
-
+    msg = await update.message.reply_text("⏳ Processing...")
+    
     ydl_opts = {
-        "format": "best",
-        "outtmpl": "video.%(ext)s",
-        "retries": 10,
-        "fragment_retries": 10,
-        "quiet": True,
-        "noplaylist": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
+        'format': 'best',
+        'cookiefile': 'youtube.com_cookies.txt', 
+        'outtmpl': 'video.mp4',
+        'quiet': True,
+        'no_warnings': True,
     }
-
+    
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
-
-        await update.message.reply_video(video=open(filename, "rb"))
-        os.remove(filename)
-
+            ydl.download([url])
+        
+        await update.message.reply_video(video=open('video.mp4', 'rb'))
+        os.remove('video.mp4')
+        await msg.delete()
+        
     except Exception as e:
-        # إصلاح تلقائي إذا حصل خطأ
-        os.system("pip install -U yt-dlp")
-        await update.message.reply_text(f"⚠️ حصل خطأ وتم محاولة الإصلاح:\n{e}")
+        await update.message.reply_text(f"Error: {str(e)}")
 
-app = ApplicationBuilder().token(TOKEN).build()
+def main():
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
+    application.run_polling()
 
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
-
-print("Bot is running...")
-app.run_polling()
+if __name__ == '__main__':
+    main()
