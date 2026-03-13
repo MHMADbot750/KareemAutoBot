@@ -1,55 +1,51 @@
 import os
 import yt_dlp
+import asyncio
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
-# التوكن الخاص بك
 TOKEN = "8701664697:AAEuxlF3u933O6-7D_p8G0N-X0YpL2mI"
 
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
-    # التأكد من أن الرسالة رابط
-    if not (url.startswith("http://") or url.startswith("https://")):
+    if "http" not in url:
         return
 
-    msg = await update.message.reply_text("⏳ Processing your video... please wait")
+    msg = await update.message.reply_text("⏳ جاري جلب الفيديو... انتظر قليلاً")
     
-    # إعدادات التحميل
+    # اسم الملف المؤقت
+    video_file = f"video_{update.message.chat_id}.mp4"
+    
     ydl_opts = {
         'format': 'best',
-        'cookiefile': 'youtube.com_cookies.txt', 
-        'outtmpl': 'video.mp4',
+        'outtmpl': video_file,
         'quiet': True,
         'no_warnings': True,
     }
+
+    # إضافة الكوكيز فقط إذا كان الرابط ليوتيوب
+    if "youtube" in url or "youtu.be" in url:
+        ydl_opts['cookiefile'] = 'youtube.com_cookies.txt'
     
     try:
-        # تنفيذ التحميل
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+            await asyncio.to_thread(ydl.download, [url])
         
-        # إرسال الفيديو للمستخدم
-        with open('video.mp4', 'rb') as video_file:
-            await update.message.reply_video(video=video_file)
+        await update.message.reply_video(video=open(video_file, 'rb'), caption="تم التحميل بنجاح ✅")
         
-        # تنظيف الملفات المؤقتة
-        if os.path.exists('video.mp4'):
-            os.remove('video.mp4')
-            
+        # تنظيف الملفات
+        if os.path.exists(video_file):
+            os.remove(video_file)
         await msg.delete()
         
     except Exception as e:
-        await update.message.reply_text(f"❌ Error: {str(e)}")
+        await update.message.reply_text(f"❌ حدث خطأ: {str(e)}")
+        if os.path.exists(video_file):
+            os.remove(video_file)
 
 def main():
-    # بناء التطبيق
     application = Application.builder().token(TOKEN).build()
-    
-    # التعامل مع الرسائل النصية
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_video))
-    
-    # بدء تشغيل البوت
-    print("Bot is running...")
     application.run_polling()
 
 if __name__ == '__main__':
