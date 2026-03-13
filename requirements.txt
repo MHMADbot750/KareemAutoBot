@@ -1,1 +1,2 @@
-pyrogram tgcrypto yt-dlp python-telegram-bot
+python-telegram-bot
+yt-dlp
