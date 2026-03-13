@@ -1,5 +1,4 @@
 import os
-import subprocess
 import yt_dlp
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
@@ -12,37 +11,35 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        ydl_opts = {
-            "format": "bestvideo+bestaudio/best",
-            "merge_output_format": "mp4",
+        # تحميل الفيديو
+        video_opts = {
+            "format": "best",
             "outtmpl": "video.mp4",
-            "writethumbnail": True,
-            "quiet": True,
-            "noplaylist": True
+            "quiet": True
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+        with yt_dlp.YoutubeDL(video_opts) as ydl:
+            ydl.download([url])
 
-        title = info.get("title", "Video")
-
-        # ارسال الفيديو
         with open("video.mp4", "rb") as f:
-            await update.message.reply_video(f, caption=title)
-
-        # استخراج الصوت
-        subprocess.run(
-            ["ffmpeg", "-i", "video.mp4", "-vn", "-ab", "192k", "-ar", "44100", "-y", "audio.mp3"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        # ارسال الصوت
-        with open("audio.mp3", "rb") as f:
-            await update.message.reply_audio(f, title=title)
+            await update.message.reply_video(f)
 
         os.remove("video.mp4")
-        os.remove("audio.mp3")
+
+        # تحميل الصوت مباشرة
+        audio_opts = {
+            "format": "bestaudio",
+            "outtmpl": "audio.m4a",
+            "quiet": True
+        }
+
+        with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            ydl.download([url])
+
+        with open("audio.m4a", "rb") as f:
+            await update.message.reply_audio(f)
+
+        os.remove("audio.m4a")
 
         await msg.delete()
 
