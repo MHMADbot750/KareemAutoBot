@@ -10,36 +10,35 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     try:
-
-        # تحميل الفيديو
+        # تحميل الفيديو بدون فرض صيغة
         video_opts = {
-            "format": "best",
-            "outtmpl": "video.mp4",
+            "format": "best[ext=mp4]/best",
+            "outtmpl": "video.%(ext)s",
             "quiet": True
         }
 
         with yt_dlp.YoutubeDL(video_opts) as ydl:
-            ydl.download([url])
+            info = ydl.extract_info(url, download=True)
+            video_file = ydl.prepare_filename(info)
 
-        with open("video.mp4", "rb") as f:
+        with open(video_file, "rb") as f:
             await update.message.reply_video(f)
+        os.remove(video_file)
 
-        os.remove("video.mp4")
-
-        # تحميل الصوت مباشرة
+        # تحميل الصوت بدون تحويل
         audio_opts = {
-            "format": "bestaudio",
-            "outtmpl": "audio.m4a",
+            "format": "bestaudio/best",
+            "outtmpl": "audio.%(ext)s",
             "quiet": True
         }
 
         with yt_dlp.YoutubeDL(audio_opts) as ydl:
-            ydl.download([url])
+            info = ydl.extract_info(url, download=True)
+            audio_file = ydl.prepare_filename(info)
 
-        with open("audio.m4a", "rb") as f:
+        with open(audio_file, "rb") as f:
             await update.message.reply_audio(f)
-
-        os.remove("audio.m4a")
+        os.remove(audio_file)
 
         await msg.delete()
 
@@ -47,9 +46,6 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.edit_text(f"❌ فشل التحميل\n{e}")
 
 app = ApplicationBuilder().token(TOKEN).build()
-
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
-
 print("Bot started")
-
 app.run_polling()
