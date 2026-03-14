@@ -1,71 +1,79 @@
 import os
-import asyncio
 import yt_dlp
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# توكن البوت
+# التوكن الخاص بك
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أهلاً بك! أرسل رابط تيك توك أو انستقرام للتحميل.")
+# إعدادات التحميل الاحترافية
+YDL_OPTS = {
+    'format': 'best',
+    'outtmpl': 'downloads/%(id)s.%(ext)s',
+    'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
+}
 
-async def download_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ البوت جاهز! أرسل أي رابط (تيك توك، انستقرام) وسأقوم بالواجب.")
+
+async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     
-    # 1. إرسال ملصق الانتظار
-    status_sticker = await update.message.reply_sticker("CAACAgIAAxkBAAEL...") # ضع ايدي ملصقك هنا
-
-    # إعدادات التحميل (فيديو وصوت)
-    ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',
-        'outtmpl': f'downloads/{chat_id}_%(id)s.%(ext)s',
-        'noplaylist': True,
-    }
+    # 1. إرسال ملصق الانتظار (استخدم ايدي ملصق متحرك)
+    wait_msg = await update.message.reply_sticker("CAACAgIAAxkBAAEL...") 
 
     try:
-        if not os.path.exists('downloads'):
-            os.makedirs('downloads')
+        if not os.path.exists('downloads'): os.makedirs('downloads')
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=True)
-            video_path = ydl.prepare_filename(info)
-            
-        # 2. إرسال الفيديو أولاً
-        with open(video_path, 'rb') as v_file:
+            file_path = ydl.prepare_filename(info)
+
+        # 2. إعداد الأزرار الشفافة كما في الصورة
+        keyboard = [
+            [InlineKeyboardButton("🎵 FindMusic Spotify", url="https://t.me/your_bot")],
+            [InlineKeyboardButton("🛑 YouTube download bot", url="https://t.me/your_bot")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # 3. إرسال الفيديو
+        with open(file_path, 'rb') as video:
             await context.bot.send_video(
                 chat_id=chat_id,
-                video=v_file,
-                caption="تم تحميل الفيديو بنجاح ✅"
+                video=video,
+                caption="✅ تم التحميل بنجاح",
+                reply_markup=reply_markup
             )
 
-        # 3. إرسال نفس الملف كـ "بصمة صوتية" أو ملف صوتي تحت الفيديو مباشرة
-        with open(video_path, 'rb') as a_file:
+        # 4. إرسال الصوت (كفيديو صوتي تحت الأصلي)
+        with open(file_path, 'rb') as audio:
             await context.bot.send_audio(
                 chat_id=chat_id,
-                audio=a_file,
+                audio=audio,
                 title="الصوت المستخرج",
-                performer="بوتي الخاص",
-                caption="تفضل الصوت 🎵"
+                performer="البوت الخاص بك"
             )
 
-        # حذف ملصق الانتظار
-        await status_sticker.delete()
+        # حذف ملصق الانتظار بعد النجاح
+        await wait_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text(f"❌ فشل التحميل: {str(e)}")
+        await update.message.reply_text(f"❌ خطأ فني: {str(e)}")
+        if wait_msg: await wait_msg.delete()
     
     finally:
-        # 4. تنظيف الخادم فوراً (مهم جداً لـ Railway)
-        if 'video_path' in locals() and os.path.exists(video_path):
-            os.remove(video_path)
+        # 5. تنظيف الخادم فوراً للحفاظ على موارد Railway
+        if 'file_path' in locals() and os.path.exists(file_path):
+            os.remove(file_path)
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_media))
-    print("البوت يعمل بنجاح...")
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_download))
+    print("البوت قيد التشغيل...")
     app.run_polling()
 
 if __name__ == '__main__':
