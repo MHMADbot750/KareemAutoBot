@@ -1,19 +1,10 @@
 import os
-import subprocess
 import yt_dlp
+import subprocess
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
-
-
-def clean():
-    for f in os.listdir():
-        if f.endswith((".mp4",".mp3",".mkv",".webm",".m4a")):
-            try:
-                os.remove(f)
-            except:
-                pass
 
 
 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -31,48 +22,55 @@ async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        clean()
-
+        # تحميل الفيديو
         ydl_opts = {
-            "format": "bestvideo+bestaudio/best",
+            "format": "best",
             "outtmpl": video_file,
-            "quiet": True,
-            "merge_output_format": "mp4"
+            "quiet": True
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
+        # ارسال الفيديو
         if os.path.exists(video_file):
-
-            with open(video_file,"rb") as f:
+            with open(video_file, "rb") as f:
                 await update.message.reply_video(f)
 
-            subprocess.run(
-                ["ffmpeg","-i",video_file,"-vn","-ab","192k","-ar","44100","-y",audio_file],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL
-            )
+        # استخراج الصوت باستخدام 2
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", video_file, "-vn", "-acodec", "libmp3lame", "-ab", "192k", audio_file],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
 
-            if os.path.exists(audio_file):
-                with open(audio_file,"rb") as f:
-                    await update.message.reply_audio(f)
-
-        await msg.delete()
+        # ارسال الصوت
+        if os.path.exists(audio_file):
+            with open(audio_file, "rb") as f:
+                await update.message.reply_audio(f)
 
     except Exception as e:
-
-        await msg.edit_text("❌ فشل التحميل")
+        await update.message.reply_text("❌ فشل التحميل")
 
     finally:
 
-        clean()
+        # حذف الملفات بعد الإرسال
+        if os.path.exists(video_file):
+            os.remove(video_file)
+
+        if os.path.exists(audio_file):
+            os.remove(audio_file)
+
+        try:
+            await msg.delete()
+        except:
+            pass
 
 
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
 
-print("Bot running...")
+print("Bot Running...")
 
 app.run_polling()
