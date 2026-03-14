@@ -1,91 +1,45 @@
 import os
-import time
-import asyncio
 import yt_dlp
-
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, CommandHandler
 
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-LOADING_STICKER = "CAACAgIAAxkBAAIBQ2X"
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("أرسل رابط TikTok أو YouTube")
 
-user_limits = {}
+async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text
 
-
-# تنظيف ملفات السيرفر
-def clean_files():
-    for f in os.listdir():
-        if f.endswith((".mp4", ".mp3", ".webm", ".mkv")):
-            try:
-                os.remove(f)
-            except:
-                pass
-
-
-# حد الاستخدام
-def check_limit(user_id):
-
-    now = time.time()
-
-    data = user_limits.get(user_id)
-
-    if not data:
-        user_limits[user_id] = {"count": 0, "time": now}
-        data = user_limits[user_id]
-
-    if now - data["time"] > 86400:
-        data["count"] = 0
-        data["time"] = now
-
-    if data["count"] >= 10:
-        return False
-
-    data["count"] += 1
-    return True
-
-
-# تحميل الفيديو
-def download_video(url, filename, fmt):
+    await update.message.reply_text("⏳ جاري التحميل...")
 
     ydl_opts = {
-        "format": fmt,
-        "outtmpl": filename,
-        "quiet": True,
-        "noplaylist": True,
-        "retries": 10
+        'outtmpl': 'video.%(ext)s',
+        'format': 'mp4',
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            file = ydl.prepare_filename(info)
 
+        await update.message.reply_video(video=open(file, 'rb'))
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        audio_file = "audio.mp3"
 
-    await update.message.reply_text(
-        "أرسل رابط YouTube أو TikTok\n"
-        "YouTube : اختيار الدقة\n"
-        "TikTok : فيديو + صوت"
-    )
+        os.system(f'ffmpeg -i "{file}" -q:a 0 -map a "{audio_file}"')
 
+        await update.message.reply_audio(audio=open(audio_file, 'rb'))
 
-# استقبال الرابط
-async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        os.remove(file)
+        os.remove(audio_file)
 
-    url = update.message.text.strip()
+    except Exception as e:
+        await update.message.reply_text("❌ فشل التحميل")
 
-    user_id = update.message.from_user.id
+app = ApplicationBuilder().token(TOKEN).build()
 
-    if not check_limit(user_id):
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
 
-        await update.message.reply_text(
-            "❌ وصلت الحد اليومي 10 تنزيلات\nارجع بعد 24 ساعة"
-        )
-
-        return
+app.run_polling()
