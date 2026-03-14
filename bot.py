@@ -6,22 +6,21 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 
 # --- الإعدادات ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
-CHANNEL_URL = 'https://t.me/ll3lso'
+DEVELOPER_URL = 'https://t.me/ll3lso' # رابط قناتك فقط
 
-# إعدادات متطورة لتجاوز قيود تيك توك وانستقرام
+# إعدادات متقدمة لحل مشكلة الروابط غير المدعومة وتجاوز حماية تيك توك
 YDL_OPTS = {
     'format': 'best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'noplaylist': True,
     'quiet': True,
     'no_warnings': True,
-    # إضافة User-Agent ليوهم الموقع أن البوت متصفح حقيقي
-    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'referer': 'https://www.tiktok.com/',
+    'ignoreerrors': True, # يتجاهل الأخطاء البسيطة ويستمر في المحاولة
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ البوت شغال! أرسل الرابط وماراح يخيب ظنك.")
+    await update.message.reply_text("✅ أهلاً بك! أرسل رابط تيك توك أو انستقرام للتحميل فوراً.")
 
 async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
@@ -29,22 +28,24 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not url.startswith("http"): return
 
-    status_msg = await update.message.reply_text("⏳ جاري التحميل... انتظر ثواني")
+    status_msg = await update.message.reply_text("⏳ جاري المعالجة...")
 
     try:
         if not os.path.exists('downloads'): os.makedirs('downloads')
 
         with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-            # محاولة التحميل مع معالجة الأخطاء
-            info = ydl.extract_info(url, download=True)
+            # تنظيف الرابط من رموز التتبع الزائدة التي تسبب خطأ Unsupported URL
+            clean_url = url.split('?')[0]
+            info = ydl.extract_info(clean_url, download=True)
+            
+            if not info:
+                # محاولة ثانية بالرابط الأصلي إذا فشل التنظيف
+                info = ydl.extract_info(url, download=True)
+                
             file_path = ydl.prepare_filename(info)
 
-        # الأزرار كما طلبتها بالضبط
-        keyboard = [
-            [InlineKeyboardButton("🎵 FindMusic Spotify", url="https://t.me/FindMusicSpotify")],
-            [InlineKeyboardButton("🛑 YouTube download bot", url="https://t.me/YoutubeDownloadBot")],
-            [InlineKeyboardButton("👨‍💻 المطور", url=CHANNEL_URL)]
-        ]
+        # زر المطور فقط - تم حذف الروابط الأخرى تماماً
+        keyboard = [[InlineKeyboardButton("👨‍💻 المطور", url=DEVELOPER_URL)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         # إرسال الفيديو
@@ -62,17 +63,18 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 audio=audio,
                 title="الصوت المستخرج",
-                performer="Kareem Auto"
+                performer="Kareem Auto Bot"
             )
 
         await status_msg.delete()
 
     except Exception as e:
-        # إذا واجه مشكلة تسجيل الدخول مرة ثانية، راح يعطيك رسالة أوضح
-        await update.message.reply_text("❌ عذراً، هذا الرابط محمي أو يحتاج تحديث للمكتبة.")
-        print(f"Error: {e}")
+        await update.message.reply_text("❌ عذراً، هذا الرابط غير مدعوم حالياً أو قد يكون خاصاً.")
+        print(f"Error details: {e}")
+        if 'status_msg' in locals(): await status_msg.delete()
     
     finally:
+        # تنظيف الذاكرة فوراً
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
 
