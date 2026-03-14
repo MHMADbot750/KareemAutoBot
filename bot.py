@@ -6,46 +6,70 @@ from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filte
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
 
-async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def clean():
+    for f in os.listdir():
+        if f.endswith(".mp4") or f.endswith(".mp3") or f.endswith(".webm"):
+            try:
+                os.remove(f)
+            except:
+                pass
+
+
+async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     url = update.message.text.strip()
 
-    await update.message.reply_text("⏳ جاري التحميل...")
+    msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     try:
 
-        ydl_opts = {
-            "format": "best",
-            "outtmpl": "video.mp4",
+        video_opts = {
+            "format": "bestvideo+bestaudio/best",
+            "merge_output_format": "mp4",
+            "outtmpl": "video.%(ext)s",
             "quiet": True
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        with yt_dlp.YoutubeDL(video_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_file = ydl.prepare_filename(info)
 
-        # إرسال الفيديو
-        if os.path.exists("video.mp4"):
-            with open("video.mp4", "rb") as f:
+        # ارسال الفيديو
+        if os.path.exists(video_file):
+            with open(video_file, "rb") as f:
                 await update.message.reply_video(f)
 
-        # استخراج الصوت
-        os.system('ffmpeg -i video.mp4 -q:a 0 -map a audio.mp3')
+        audio_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": "audio.%(ext)s",
+            "quiet": True,
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192"
+            }]
+        }
 
+        with yt_dlp.YoutubeDL(audio_opts) as ydl:
+            ydl.download([url])
+
+        # ارسال الصوت
         if os.path.exists("audio.mp3"):
             with open("audio.mp3", "rb") as f:
                 await update.message.reply_audio(f)
 
-        # تنظيف السيرفر
-        os.remove("video.mp4")
-        os.remove("audio.mp3")
+        clean()
+
+        await msg.delete()
 
     except Exception as e:
-        await update.message.reply_text("❌ فشل التحميل")
+        clean()
+        await msg.edit_text("❌ فشل التحميل")
 
 
 app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
 
 print("Bot running...")
 
