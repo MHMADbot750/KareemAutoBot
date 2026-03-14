@@ -1,76 +1,76 @@
 import os
+import asyncio
 import yt_dlp
-import subprocess
-from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram import Update, InputFile
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+# توكن البوت الخاص بك من BotFather
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
+# إعدادات yt-dlp للتحميل الشامل (تيك توك، انستقرام، يوتيوب... إلخ)
+YDL_OPTIONS = {
+    'format': 'best',
+    'outtmpl': 'downloads/%(id)s.%(ext)s', # حفظ في مجلد مؤقت
+    'noplaylist': True,
+    'restrictfilenames': True,
+}
 
-async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("أهلاً بك! أرسل لي رابط فيديو من تيك توك أو انستقرام وسأقوم بتحميله لك فوراً.")
 
-    url = update.message.text.strip()
+async def download_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    url = update.message.text
+    chat_id = update.message.chat_id
 
-    if "tiktok.com" not in url and "youtube.com" not in url and "youtu.be" not in url:
-        await update.message.reply_text("أرسل رابط TikTok أو YouTube فقط")
-        return
-
-    msg = await update.message.reply_text("⏳ جاري التحميل...")
-
-    video_file = "video.mp4"
-    audio_file = "audio.mp3"
+    # 1. إرسال ملصق متحرك (استبدل المعرف بملصق من اختيارك)
+    # ملاحظة: يمكنك الحصول على معرف الملصق عن طريق إرساله لبوت @idstickerbot
+    status_msg = await update.message.reply_sticker("CAACAgIAAxkBAAEJ...") 
 
     try:
+        if not os.path.exists('downloads'):
+            os.makedirs('downloads')
 
-        # تحميل الفيديو
-        ydl_opts = {
-            "format": "best",
-            "outtmpl": video_file,
-            "quiet": True
-        }
+        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_path = ydl.prepare_filename(info)
+            audio_path = video_path.rsplit('.', 1)[0] + ".mp3"
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        # 2. إرسال الفيديو
+        with open(video_path, 'rb') as video:
+            sent_video = await context.bot.send_video(
+                chat_id=chat_id,
+                video=video,
+                caption="✅ تم التحميل بنجاح عبر بوتك"
+            )
 
-        # ارسال الفيديو
-        if os.path.exists(video_file):
-            with open(video_file, "rb") as f:
-                await update.message.reply_video(f)
+        # 3. استخراج وإرسال الصوت (اختياري كما في الصورة)
+        # ملاحظة: yt-dlp يحمل الفيديو، سنرسله كملف صوتي أيضاً
+        with open(video_path, 'rb') as audio:
+            await context.bot.send_audio(
+                chat_id=chat_id,
+                audio=audio,
+                title="الصوت المستخرج",
+                performer="المؤدي غير معروف"
+            )
 
-        # استخراج الصوت باستخدام 2
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", video_file, "-vn", "-acodec", "libmp3lame", "-ab", "192k", audio_file],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL
-        )
-
-        # ارسال الصوت
-        if os.path.exists(audio_file):
-            with open(audio_file, "rb") as f:
-                await update.message.reply_audio(f)
+        # 4. حذف الملصق بعد الانتهاء
+        await status_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text("❌ فشل التحميل")
-
+        await update.message.reply_text(f"حدث خطأ أثناء المعالجة: {str(e)}")
+    
     finally:
+        # 5. الحذف التلقائي من الخادم (Railway) لتنظيف الذاكرة
+        if 'video_path' in locals() and os.path.exists(video_path):
+            os.remove(video_path)
 
-        # حذف الملفات بعد الإرسال
-        if os.path.exists(video_file):
-            os.remove(video_file)
+def main():
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download_media))
+    
+    print("البوت يعمل الآن...")
+    application.run_polling()
 
-        if os.path.exists(audio_file):
-            os.remove(audio_file)
-
-        try:
-            await msg.delete()
-        except:
-            pass
-
-
-app = ApplicationBuilder().token(TOKEN).build()
-
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, download))
-
-print("Bot Running...")
-
-app.run_polling()
+if __name__ == '__main__':
+    main()
