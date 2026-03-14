@@ -18,13 +18,11 @@ def clean():
             except:
                 pass
                 async def download(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     url = update.message.text.strip()
 
     msg = await update.message.reply_text("⏳ جاري التحميل...")
 
     try:
-
         clean()
 
         # تحميل الفيديو
@@ -42,7 +40,6 @@ def clean():
         if os.path.exists(video_file):
             with open(video_file, "rb") as f:
                 await update.message.reply_video(f)
-
         # استخراج الصوت
         audio_opts = {
             "format": "bestaudio/best",
@@ -53,7 +50,6 @@ def clean():
                 "preferredcodec": "mp3",
                 "preferredquality": "192"
             }]
-        }
 
         with yt_dlp.YoutubeDL(audio_opts) as ydl:
             ydl.download([url])
@@ -61,7 +57,6 @@ def clean():
         if os.path.exists("audio.mp3"):
             with open("audio.mp3","rb") as f:
                 await update.message.reply_audio(f)
-
         clean()
 
         await msg.delete()
