@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # --- [ الإعدادات ] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-# إعدادات تجعل السيرفر يظهر كأنه متصفح حقيقي لتجنب الحظر
+# إعدادات المحرك العالمي لدعم كافة مواقع التواصل (يوتيوب، تيك توك، فيسبوك، انستغرام)
 YDL_OPTS = {
     'format': 'best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
@@ -22,16 +22,17 @@ YDL_OPTS = {
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("أهلاً بك في Kareem Auto 🚀\nأرسل رابط فيديو أو صور من تيك توك وسأقوم بالتحميل فوراً.")
+    # تغيير الكليشة وإضافة سمايل متحرك
+    await update.message.reply_text("🌀 أهلاً بك في نظام Kareem Auto\n\nقم بإرسال رابط (فيديو أو صور) من أي منصة وسأقوم بمعالجته فوراً 📥")
 
 async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     if not url.startswith("http"): return
 
-    status_msg = await update.message.reply_text("⏳ جاري التحميل ومعالجة الملفات...")
+    status_msg = await update.message.reply_text("⚡ جاري المعالجة...")
 
-    # إنشاء مجلد مؤقت خاص بهذه العملية فقط لسهولة الحذف
+    # إنشاء مجلد مؤقت (تفريغ ذاكرة فوري)
     temp_folder = f"work_{chat_id}_{int(asyncio.get_event_loop().time())}"
     if not os.path.exists(temp_folder): os.makedirs(temp_folder)
 
@@ -40,10 +41,9 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_opts['outtmpl'] = f'{temp_folder}/%(id)s.%(ext)s'
 
         with yt_dlp.YoutubeDL(current_opts) as ydl:
-            # استخراج البيانات وتحميل الملف
             info = ydl.extract_info(url, download=True)
             
-            # 1. إذا كان المحتوى ألبوم صور (Slideshow)
+            # 1. معالجة الصور (في حال كان تيك توك ألبوم)
             if 'entries' in info or (not info.get('url') and info.get('formats') is None):
                 images = info.get('requested_formats', []) or info.get('entries', [])
                 img_urls = [i.get('url') for i in images if i.get('url')]
@@ -51,29 +51,28 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     media = [InputMediaPhoto(u) for u in img_urls[:10]]
                     await context.bot.send_media_group(chat_id=chat_id, media=media)
             
-            # 2. إذا كان فيديو عادي (من تيك توك أو يوتيوب أو غيره)
+            # 2. معالجة الفيديو والصوت لجميع المواقع
             file_path = ydl.prepare_filename(info)
             if os.path.exists(file_path):
                 # إرسال الفيديو
                 with open(file_path, 'rb') as v:
-                    await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ تم تحميل الفيديو")
+                    await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ Video")
                 
-                # إرسال الصوت بشكل مستقل تحت الفيديو
+                # إرسال الصوت بعنوان MP3 كما طلبت
                 with open(file_path, 'rb') as a:
-                    await context.bot.send_audio(chat_id=chat_id, audio=a, title="الصوت المستخرج")
+                    await context.bot.send_audio(chat_id=chat_id, audio=a, title="MP3 - Kareem Auto", performer="Audio")
 
         await status_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text("⚠️ عذراً، لم أتمكن من جلب البيانات. تأكد من الرابط أو حاول مرة أخرى.")
+        await update.message.reply_text("❌ عذراً، هذا الرابط غير مدعوم حالياً أو السيرفر محظور.")
         print(f"Error: {e}")
     
     finally:
         # --- [ بروتوكول تنظيف الخادم فوري ] ---
-        # ننتظر 5 ثوانٍ لضمان اكتمال الرفع للتلجرام ثم نمسح كل شيء
         await asyncio.sleep(5)
         if os.path.exists(temp_folder):
-            shutil.rmtree(temp_folder) # حذف المجلد والملفات تماماً من ذاكرة السيرفر
+            shutil.rmtree(temp_folder) # مسح الذاكرة فوراً لضمان عدم الامتلاء
 
 def main():
     app = Application.builder().token(TOKEN).build()
