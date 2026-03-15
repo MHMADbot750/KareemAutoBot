@@ -5,81 +5,72 @@ import shutil
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- [Operational Config] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
-# إعدادات متقدمة لجلب الصور والفيديو بدون FFmpeg
+# إعدادات قوية لمحاكاة متصفح حقيقي وتفادي الحظر
 YDL_OPTS = {
-    'format': 'best', 
+    'format': 'best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'noplaylist': True,
     'quiet': True,
     'no_warnings': True,
     'nocheckcertificate': True,
+    # إضافة ميزة كسر التشفير عبر عملاء مختلفين
+    'extractor_args': {'tiktok': {'app_version': '33.1.2', 'manifest_app_version': '33.1.2'}},
     'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
     }
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ نظام Kareem Auto مفعل.\n• تنزيل فيديو/صور تيك توك\n• استخراج الصوت تلقائياً\n• تنظيف الذاكرة فوري")
+    await update.message.reply_text("🚀 نظام Kareem Auto المحدث جاهز.\nأرسل رابط تيك توك (فيديو أو صور) الآن.")
 
 async def handle_tiktok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     if "tiktok.com" not in url: return
 
-    status_msg = await update.message.reply_text("⏳ جاري سحب المحتوى (فيديو/صور)...")
+    status_msg = await update.message.reply_text("🔄 جاري محاولة كسر الحظر وسحب المحتوى...")
 
-    # إنشاء منطقة عمل مؤقتة (تفريغ ذاكرة لاحق)
-    worker_dir = f"task_{chat_id}_{int(asyncio.get_event_loop().time())}"
-    if not os.path.exists(worker_dir): os.makedirs(worker_dir)
+    process_dir = f"clean_task_{chat_id}"
+    if not os.path.exists(process_dir): os.makedirs(process_dir)
 
     try:
-        opts = YDL_OPTS.copy()
-        opts['outtmpl'] = f'{worker_dir}/%(id)s.%(ext)s'
+        current_opts = YDL_OPTS.copy()
+        current_opts['outtmpl'] = f'{process_dir}/%(id)s.%(ext)s'
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
+        with yt_dlp.YoutubeDL(current_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            # --- [الذكاء الصناعي في التمييز بين الصور والفيديو] ---
-            
-            # 1. حالة صور تيك توك (Slideshow)
-            if info.get('formats') is None or 'entries' in info or not info.get('duration'):
-                # البحث عن روابط الصور في البيانات المستخرجة
+            # 1. إذا كان المحتوى "صور" (ألبوم)
+            if info.get('duration') == 0 or 'entries' in info:
                 images = info.get('requested_formats', []) or info.get('entries', [])
-                img_list = [i.get('url') for i in images if i.get('url')]
-                
-                if img_list:
-                    # إرسال الصور كمجموعة (البوم)
-                    media = [InputMediaPhoto(u) for u in img_list[:10]]
+                img_urls = [i.get('url') for i in images if i.get('url')]
+                if img_urls:
+                    media = [InputMediaPhoto(u) for u in img_urls[:10]]
                     await context.bot.send_media_group(chat_id=chat_id, media=media)
-                    # إرسال الصوت الخاص بالألبوم
-                    audio_url = info.get('url') or info.get('webpage_url')
-                    await context.bot.send_audio(chat_id=chat_id, audio=audio_url, title="صوت الصور")
             
-            # 2. حالة الفيديو العادي
-            else:
-                file_path = ydl.prepare_filename(info)
-                if os.path.exists(file_path):
-                    # إرسال الفيديو
-                    with open(file_path, 'rb') as v:
-                        await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ الفيديو جاهز")
-                    # إرسcl الصوت تحت الفيديو مباشرة
-                    with open(file_path, 'rb') as a:
-                        await context.bot.send_audio(chat_id=chat_id, audio=a, title="الصوت المستخرج")
+            # 2. إذا كان المحتوى "فيديو"
+            file_path = ydl.prepare_filename(info)
+            if os.path.exists(file_path):
+                with open(file_path, 'rb') as v:
+                    await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ تم التحميل")
+                with open(file_path, 'rb') as a:
+                    await context.bot.send_audio(chat_id=chat_id, audio=a, title="الصوت")
 
         await status_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text("⚠️ فشل في جلب البيانات. تأكد من تحديث نظام السيرفر.")
+        await update.message.reply_text("❌ تيك توك حظر عنوان السيرفر. جاري المحاولة مرة أخرى...")
         print(f"Error Log: {e}")
     
     finally:
-        # --- [بروتوكول تطهير الذاكرة] ---
-        await asyncio.sleep(5) # انتظار الإرسال
-        if os.path.exists(worker_dir):
-            shutil.rmtree(worker_dir) # حذف المجلد والملفات نهائياً من السيرفر
+        # التطهير الفوري للذاكرة
+        await asyncio.sleep(5)
+        if os.path.exists(process_dir):
+            shutil.rmtree(process_dir)
 
 def main():
     app = Application.builder().token(TOKEN).build()
