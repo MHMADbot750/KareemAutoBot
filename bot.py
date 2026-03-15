@@ -5,61 +5,49 @@ import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- [الإعدادات الأمنية القصوى] ---
+# --- [Operational Config] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 DEVELOPER_URL = 'https://t.me/ll3lso'
 
-# 1. نظام التحديث التلقائي الإجباري لضمان كسر الحماية يومياً
-def auto_upgrade():
+def update_system():
+    """تحديث المحرك لكسر حمايات 2026 الجديدة"""
     try:
         subprocess.check_call(["pip", "install", "--upgrade", "yt-dlp"])
-    except:
-        pass
+    except: pass
 
-auto_upgrade()
+# تحديث عند الإقلاع
+update_system()
 
-# 2. إعدادات "الاختراق الشامل" (تدمير قيود FFmpeg والحظر)
+# إعدادات الاستخراج (ناريّة - شاملة - بدون FFmpeg)
 YDL_OPTS = {
-    # دمج ذكي: نطلب أفضل ملف جاهز (mp4) لتجنب الحاجة لـ FFmpeg نهائياً
-    'format': 'best[ext=mp4]/best',
+    'format': 'best[ext=mp4]/best', # ضمان جودة MP4 مدمجة الصوت
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'noplaylist': True,
     'quiet': True,
     'no_warnings': True,
     'nocheckcertificate': True,
-    
-    # محاكاة "هوية الأجهزة الذكية" (تجاوز حظر يوتيوب وتيك توك)
-    'extractor_args': {
-        'youtube': {'player_client': ['ios', 'android']},
-        'tiktok': {'app_version': '33.3.4'}
-    },
-    
-    # بصمة متصفح عابرة للأبعاد
+    'extractor_args': {'youtube': {'player_client': ['ios']}}, # انتحال هوية آيفون
     'http_headers': {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
         'Accept': '*/*',
         'Referer': 'https://www.google.com/',
-        'Accept-Language': 'en-US,en;q=0.9',
-    },
-    'cookiefile': 'cookies.txt' # إذا كان لديك ملف كوكيز، ضعه هنا لكسر المستحيل
+    }
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🜄🜏 تم تفعيل البروتوكول الناري 🔥\nنحن في وضع الهجوم الكامل. أرسل الرابط الآن.")
+    await update.message.reply_text("🜄🜏 البوت الناري جاهز سيدي المطور 🔥\nأرسل أي رابط (يوتيوب، تيك توك، إلخ) وسأستخرج لك الفيديو والصوت فوراً.")
 
 async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     if not url.startswith("http"): return
 
-    status_msg = await update.message.reply_text("⚡ جاري كسر التشفير وتجاوز قيود الخادم...")
+    prog_msg = await update.message.reply_text("⚡ جاري استخراج البيانات وكسر التشفير...")
 
     file_path = None 
     try:
-        # إنشاء مجلد التحميل إذا لم يكن موجوداً
         if not os.path.exists('downloads'): os.makedirs('downloads')
 
-        # تنفيذ الهجوم لسحب الملف
         with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = ydl.prepare_filename(info)
@@ -67,51 +55,49 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("👨‍💻 المطور", url=DEVELOPER_URL)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # إرسال الفيديو (سيعمل على يوتيوب، تيك توك، فيسبوك، انستغرام)
+        # 1. إرسال الفيديو (المهمة الأولى)
         with open(file_path, 'rb') as video:
             await context.bot.send_video(
                 chat_id=chat_id,
                 video=video,
-                caption="🚀 تمت المهمة بنجاح سيدي المطور",
+                caption="✅ تم تحميل الفيديو بنجاح",
                 reply_markup=reply_markup,
                 supports_streaming=True
             )
         
-        # استخراج الصوت كطبقة ثانية تحت الفيديو
+        # 2. إرسال الصوت (المهمة الثانية - تحت الفيديو مباشرة)
         with open(file_path, 'rb') as audio:
             await context.bot.send_audio(
                 chat_id=chat_id,
                 audio=audio,
-                title="System Sound Trace",
-                performer="LØGHØST-Z"
+                title="Audio Extraction",
+                performer="Kareem Auto Bot"
             )
 
-        await status_msg.delete()
+        await prog_msg.delete()
 
     except Exception as e:
-        # في حال حدوث خطأ، نقوم بتحديث المكتبة فوراً للمحاولة القادمة
-        auto_upgrade()
-        await update.message.reply_text(f"⚠️ حماية الموقع قوية جداً. تم تحديث أسلحتنا، حاول إرسال الرابط مرة أخرى.")
-        print(f"Bypass Trace: {e}")
-        if 'status_msg' in locals(): await status_msg.delete()
+        update_system() # تحديث النظام عند الفشل
+        await update.message.reply_text("⚠️ الموقع قام بتغيير التشفير. تم تحديث أسلحتنا، أعد إرسال الرابط.")
+        if 'prog_msg' in locals(): await prog_msg.delete()
     
     finally:
-        # 3. تطهير الذاكرة الفوري (حماية الخادم المجاني)
-        await asyncio.sleep(2)
+        # تطهير الخادم (مسح الأثر)
+        await asyncio.sleep(3)
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
-                # حذف أي ملفات مؤقتة متبقية
                 base = os.path.splitext(file_path)[0]
-                for ext in ['.part', '.ytdl', '.temp', '.mp4']:
+                for ext in ['.part', '.ytdl', '.mp4']:
                     if os.path.exists(base + ext): os.remove(base + ext)
             except: pass
 
 def main():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_download))
-    application.run_polling()
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_download))
+    print("🔱 LØGHØST-Z Core is Active...")
+    app.run_polling()
 
 if __name__ == '__main__':
     main()
