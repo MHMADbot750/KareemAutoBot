@@ -5,9 +5,10 @@ import shutil
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- [Operational Config] ---
+# --- [الإعدادات الأساسية] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 
+# إعدادات الاستخراج القصوى (تجاوز الحماية + أعلى جودة)
 YDL_OPTS = {
     'format': 'bestvideo+bestaudio/best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
@@ -21,56 +22,61 @@ YDL_OPTS = {
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🜄🜏 تم تفعيل نظام KareemAuto الشامل 🔥\nدعم كامل لـ: (فيديو تيك توك - صور تيك توك - استخراج الصوت)")
+    await update.message.reply_text("🜄🜏 تم تفعيل نظام Kareem Auto الشامل 🔥\n(فيديو + صور + استخراج الصوت + تنظيف تلقائي للذاكرة)")
 
 async def handle_tiktok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     if "tiktok.com" not in url: return
 
-    status_msg = await update.message.reply_text("⚡ جاري استخراج المحتوى (فيديو/صور) وتطهير النظام...")
+    status_msg = await update.message.reply_text("⚡ جاري المعالجة والاستخراج...")
 
-    # إنشاء مجلد فرعي لكل عملية لضمان عدم تداخل الملفات وتسهيل التطهير
-    download_dir = f"downloads_{chat_id}"
-    if not os.path.exists(download_dir): os.makedirs(download_dir)
+    # إنشاء مجلد مؤقت فرعي لكل عملية لضمان التنظيف الشامل
+    process_dir = f"temp_{chat_id}_{asyncio.get_event_loop().time()}"
+    if not os.path.exists(process_dir): os.makedirs(process_dir)
 
     try:
         current_opts = YDL_OPTS.copy()
-        current_opts['outtmpl'] = f'{download_dir}/%(id)s.%(ext)s'
+        current_opts['outtmpl'] = f'{process_dir}/%(id)s.%(ext)s'
 
         with yt_dlp.YoutubeDL(current_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             
-            # التحقق إذا كان الرابط يحتوي على صور (Slideshow)
-            if 'entries' in info or info.get('formats') is None:
-                # منطق معالجة الصور
+            # --- [المرحلة 1: إرسال المحتوى (فيديو أو صور)] ---
+            if info.get('formats') is None or 'entries' in info:
+                # معالجة نظام الصور (Slideshow)
                 images = [f.get('url') for f in info.get('requested_formats', []) if 'url' in f] or [info.get('url')]
-                media_group = [InputMediaPhoto(img) for img in images[:10]] # بحد أقصى 10 صور للتلجرام
-                
+                media_group = [InputMediaPhoto(img) for img in images[:10]]
                 if media_group:
                     await context.bot.send_media_group(chat_id=chat_id, media=media_group)
-                    # إرسال الصوت الخاص بالصور
-                    audio_url = info.get('url') # غالباً ما يكون الرابط نفسه يحتوي على الصوت
-                    await update.message.reply_audio(audio=audio_url, title="TikTok Slideshow Audio")
             else:
-                # منطق معالجة الفيديو العادي
+                # معالجة الفيديو العادي
                 file_path = ydl.prepare_filename(info)
                 if os.path.exists(file_path):
                     with open(file_path, 'rb') as v:
-                        await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ فيديو تيك توك")
-                    with open(file_path, 'rb') as a:
-                        await context.bot.send_audio(chat_id=chat_id, audio=a, title="TikTok Audio")
+                        await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ تم تحميل الفيديو")
+
+            # --- [المرحلة 2: استخراج وإرسال الصوت] ---
+            # نستخدم الرابط المباشر للصوت لسرعة الاستجابة وتوفير الذاكرة
+            audio_url = info.get('url')
+            await context.bot.send_audio(
+                chat_id=chat_id, 
+                audio=audio_url, 
+                title="TikTok Audio Trace", 
+                performer="Kareem Auto Bot"
+            )
 
         await status_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text(f"⚠️ فشل في النظام: {str(e)[:50]}")
+        await update.message.reply_text(f"⚠️ فشل النظام: {str(e)[:50]}")
     
     finally:
-        # --- [بروتوكول التطهير النووي] ---
+        # --- [المرحلة 3: تنظيف الذاكرة مباشرة] ---
+        # الانتظار لضمان اكتمال الإرسال قبل المسح
         await asyncio.sleep(5)
-        if os.path.exists(download_dir):
-            shutil.rmtree(download_dir) # حذف المجلد بالكامل مع كل ما بداخله
+        if os.path.exists(process_dir):
+            shutil.rmtree(process_dir) # مسح المجلد بالكامل من السيرفر فوراً
 
 def main():
     app = Application.builder().token(TOKEN).build()
