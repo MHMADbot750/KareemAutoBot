@@ -4,31 +4,30 @@ import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- الإعدادات ---
+# --- [Operational Parameters] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
 DEVELOPER_URL = 'https://t.me/ll3lso'
 
-# إعدادات معززة لتجاوز قيود الحماية ودعم كافة الصيغ
+# إعدادات معالجة البيانات العميقة (Deep Processing)
 YDL_OPTS = {
-    # دمج الصوت والصورة بأعلى جودة ممكنة تلقائياً
+    # 1. دعم الفيديوهات الكبيرة والجودة العالية
     'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'noplaylist': True,
     'quiet': True,
     'no_warnings': True,
     'nocheckcertificate': True,
-    # هويّة متصفح حديثة جداً لتجنب كشف "البوت" من قبل تيك توك ويوتيوب
+    # 2. تجاوز حماية تيك توك ويوتيوب (User-Agent محاكي للبشر)
     'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    'referer': 'https://www.tiktok.com/',
-    # تفعيل خيارات تحويل الصور (Slide Show) إلى فيديو MP4
+    'referer': 'https://www.google.com/',
+    # 3. معالجة الصور (Slide Show) وتحويلها لفيديو
     'allow_unplayable_formats': True,
     'merge_output_format': 'mp4',
-    'extract_flat': False,
-    'wait_for_video': True,
+    'cookiefile': 'cookies.txt', # اختياري: إذا توفر ملف كوكيز لتجاوز الحماية القصوى
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ نظام التحميل في المختبر السري يعمل. أرسل الرابط للمعالجة.")
+    await update.message.reply_text("🜄🜏 جاهز سيدي المطور 🔥\nأرسل الرابط لبدء عملية الاستخراج.")
 
 async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
@@ -36,59 +35,56 @@ async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not url.startswith("http"): return
 
-    status_msg = await update.message.reply_text("⏳ جاري سحب البيانات وتجاوز الحماية...")
+    status_msg = await update.message.reply_text("⏳ جاري اختراق حماية الرابط وسحب البيانات...")
 
     file_path = None 
     try:
         if not os.path.exists('downloads'): os.makedirs('downloads')
 
         with yt_dlp.YoutubeDL(YDL_OPTS) as ydl:
-            # تنظيف الرابط لضمان عدم رفض الطلب من السيرفر
+            # تنظيف الرابط لضمان قبول السيرفر للطلب
             clean_url = url.split('?')[0] if "tiktok" in url else url
             info = ydl.extract_info(clean_url, download=True)
-            if not info:
-                raise Exception("فشل جلب البيانات")
-            
             file_path = ydl.prepare_filename(info)
 
         keyboard = [[InlineKeyboardButton("👨‍💻 المطور", url=DEVELOPER_URL)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # التأكد من وجود الملف قبل محاولة الإرسال
-        if os.path.exists(file_path):
-            # إرسال الفيديو (شامل الصوت والصور المحولة)
-            with open(file_path, 'rb') as video:
-                await context.bot.send_video(
-                    chat_id=chat_id,
-                    video=video,
-                    caption="✅ تم استخراج البيانات بنجاح",
-                    reply_markup=reply_markup,
-                    supports_streaming=True
-                )
-            
-            # إرسال الصوت بشكل منفصل (اختياري، تم إبقاؤه لضمان شمولية الاستخراج)
-            with open(file_path, 'rb') as audio:
-                await context.bot.send_audio(
-                    chat_id=chat_id,
-                    audio=audio,
-                    title="Audio Extraction",
-                    performer="Kareem Auto Bot"
-                )
+        # 4. إرسال الفيديو (مهما كان حجمه ضمن حدود تلجرام)
+        with open(file_path, 'rb') as video:
+            await context.bot.send_video(
+                chat_id=chat_id,
+                video=video,
+                caption="✅ تم الاستخراج بنجاح",
+                reply_markup=reply_markup,
+                supports_streaming=True
+            )
+        
+        # 5. استخراج الصوت وإرساله تحت الفيديو (طلبك المحدد)
+        with open(file_path, 'rb') as audio:
+            await context.bot.send_audio(
+                chat_id=chat_id,
+                audio=audio,
+                title="Audio Trace",
+                performer="LØGHØST-Z Core"
+            )
 
         await status_msg.delete()
 
     except Exception as e:
-        await update.message.reply_text("❌ خطأ أمني: فشل تجاوز حماية الرابط. تأكد من تحديث المكتبة أو استخدام بروكبسي.")
-        print(f"Detailed Lab Error: {e}")
+        await update.message.reply_text(f"❌ خطأ في النظام: {str(e)[:50]}...")
         if 'status_msg' in locals(): await status_msg.delete()
     
     finally:
-        # بروتوكول مسح الأثر: تنظيف الذاكرة فوراً
+        # --- [بروتوكول تنظيف الخادم الفوري] ---
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except:
-                pass
+                # حذف الملفات المؤقتة التي قد تتركها yt-dlp
+                base_path = os.path.splitext(file_path)[0]
+                for ext in ['.mp4', '.m4a', '.webm', '.part', '.ytdl']:
+                    if os.path.exists(base_path + ext): os.remove(base_path + ext)
+            except: pass
 
 def main():
     app = Application.builder().token(TOKEN).build()
