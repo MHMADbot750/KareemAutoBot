@@ -1,106 +1,81 @@
 import os
 import asyncio
-import subprocess
 import yt_dlp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import shutil
+from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- [Operational Parameters] ---
+# --- [Operational Config] ---
 TOKEN = "8701664697:AAEuxlF3u933KIB3DNouLE7E5_Y1_1hzn4A"
-DEVELOPER_URL = 'https://t.me/ll3lso'
 
-def update_system():
-    """تحديث قسري لكسر تشفير يوتيوب الجديد"""
-    try:
-        subprocess.check_call(["pip", "install", "--upgrade", "yt-dlp"])
-    except: pass
-
-update_system()
-
-# إعدادات الاختراق (قوة نارية مستهدفة)
-YDL_OPTS_YT = {
-    'format': 'best[ext=mp4]/best', # تجاوز FFmpeg
+YDL_OPTS = {
+    'format': 'bestvideo+bestaudio/best',
     'outtmpl': 'downloads/%(id)s.%(ext)s',
     'noplaylist': True,
+    'quiet': True,
+    'no_warnings': True,
     'nocheckcertificate': True,
-    # السر الناري: استخدام عملاء متعددين لتضليل نظام الحماية
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android_test', 'web_embedded', 'tvhtml5embedded'],
-            'player_skip': ['webpage', 'configs'],
-        }
-    },
     'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36',
-        'Accept': '*/*',
-    }
-}
-
-YDL_OPTS_TT = {
-    'format': 'bestaudio/best',
-    'outtmpl': 'downloads/%(id)s.%(ext)s',
-    'noplaylist': True,
-    'http_headers': {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     }
 }
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🜄🜏 جاهز للاختراق سيدي المطور 🔥\n✅ تيك توك: صوت\n✅ يوتيوب: فيديو")
+    await update.message.reply_text("🜄🜏 تم تفعيل نظام KareemAuto الشامل 🔥\nدعم كامل لـ: (فيديو تيك توك - صور تيك توك - استخراج الصوت)")
 
-async def handle_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_tiktok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
-    if not url.startswith("http"): return
+    if "tiktok.com" not in url: return
 
-    status_msg = await update.message.reply_text("⚡ جاري اختراق حماية يوتيوب وسحب الفيديو...")
+    status_msg = await update.message.reply_text("⚡ جاري استخراج المحتوى (فيديو/صور) وتطهير النظام...")
 
-    is_tiktok = "tiktok.com" in url
-    opts = YDL_OPTS_TT if is_tiktok else YDL_OPTS_YT
+    # إنشاء مجلد فرعي لكل عملية لضمان عدم تداخل الملفات وتسهيل التطهير
+    download_dir = f"downloads_{chat_id}"
+    if not os.path.exists(download_dir): os.makedirs(download_dir)
 
-    file_path = None 
     try:
-        if not os.path.exists('downloads'): os.makedirs('downloads')
+        current_opts = YDL_OPTS.copy()
+        current_opts['outtmpl'] = f'{download_dir}/%(id)s.%(ext)s'
 
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            # محاولة الاستخراج مع تجاوز الحظر
+        with yt_dlp.YoutubeDL(current_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            file_path = ydl.prepare_filename(info)
-
-        keyboard = [[InlineKeyboardButton("👨‍💻 المطور", url=DEVELOPER_URL)]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-
-        if os.path.exists(file_path):
-            if is_tiktok:
-                with open(file_path, 'rb') as audio:
-                    await context.bot.send_audio(chat_id=chat_id, audio=audio, caption="✅ صوت تيك توك", reply_markup=reply_markup)
+            
+            # التحقق إذا كان الرابط يحتوي على صور (Slideshow)
+            if 'entries' in info or info.get('formats') is None:
+                # منطق معالجة الصور
+                images = [f.get('url') for f in info.get('requested_formats', []) if 'url' in f] or [info.get('url')]
+                media_group = [InputMediaPhoto(img) for img in images[:10]] # بحد أقصى 10 صور للتلجرام
+                
+                if media_group:
+                    await context.bot.send_media_group(chat_id=chat_id, media=media_group)
+                    # إرسال الصوت الخاص بالصور
+                    audio_url = info.get('url') # غالباً ما يكون الرابط نفسه يحتوي على الصوت
+                    await update.message.reply_audio(audio=audio_url, title="TikTok Slideshow Audio")
             else:
-                with open(file_path, 'rb') as video:
-                    await context.bot.send_video(chat_id=chat_id, video=video, caption="✅ فيديو يوتيوب مخترق", reply_markup=reply_markup, supports_streaming=True)
-        
+                # منطق معالجة الفيديو العادي
+                file_path = ydl.prepare_filename(info)
+                if os.path.exists(file_path):
+                    with open(file_path, 'rb') as v:
+                        await context.bot.send_video(chat_id=chat_id, video=v, caption="✅ فيديو تيك توك")
+                    with open(file_path, 'rb') as a:
+                        await context.bot.send_audio(chat_id=chat_id, audio=a, title="TikTok Audio")
+
         await status_msg.delete()
 
     except Exception as e:
-        print(f"Crit Error: {e}")
-        # إذا فشل، نقوم بتحديث المكتبة فوراً للمحاولة القادمة
-        update_system()
-        await update.message.reply_text("❌ يوتيوب قام بصد الهجوم. تم تحديث أسلحتنا، كرر المحاولة الآن.")
-        if 'status_msg' in locals(): await status_msg.delete()
+        await update.message.reply_text(f"⚠️ فشل في النظام: {str(e)[:50]}")
     
     finally:
-        await asyncio.sleep(2)
-        if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-                base = os.path.splitext(file_path)[0]
-                for ext in ['.part', '.ytdl', '.mp4', '.m4a']:
-                    if os.path.exists(base + ext): os.remove(base + ext)
-            except: pass
+        # --- [بروتوكول التطهير النووي] ---
+        await asyncio.sleep(5)
+        if os.path.exists(download_dir):
+            shutil.rmtree(download_dir) # حذف المجلد بالكامل مع كل ما بداخله
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_download))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_tiktok))
     app.run_polling()
 
 if __name__ == '__main__':
